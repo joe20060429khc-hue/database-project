@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>學生作業管理系統</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 30px; background-color: #f4f4f4; }
+        .box { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background-color: #333; color: white; }
+        button { padding: 10px 15px; background: #007BFF; color: white; border: none; cursor: pointer; border-radius: 4px; margin-right: 5px;}
+        button:hover { background: #0056b3; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+    <h2>🎓 學生作業管理後台 (SQL Server 實作展示)</h2>
+
+    <div id="login-section" class="box">
+        <h3>學生登入</h3>
+        <input type="text" id="username" placeholder="請輸入學號 (e.g. 1130001)">
+        <input type="password" id="password" placeholder="請輸入密碼 (e.g. pass_ming)">
+        <button onclick="login()">登入</button>
+    </div>
+
+    <div id="main-dashboard" class="box hidden">
+        <h3>歡迎，<span id="user-display"></span> 同學！</h3>
+        <p>請選擇你要對資料庫進行的進階 `SELECT` 查詢展示：</p>
+        <button onclick="fetchData('schedule')">1. 查詢個人課表 (JOIN)</button>
+        <button onclick="fetchData('stats')">2. 作業狀況統計 (Aggregate)</button>
+        <button onclick="fetchData('grades')">3. 成績與全班平均對比 (Subquery)</button>
+        <button onclick="fetchData('slackers')">4. 班級缺交名單 (CROSS JOIN/NOT IN)</button>
+        <button onclick="logout()" style="background:#DC3545;">登出</button>
+    </div>
+
+    <div id="result-section" class="box hidden">
+        <h3 id="result-title">查詢結果</h3>
+        <div id="table-container"></div>
+    </div>
+
+    <script>
+        let currentUser = null;
+
+        async function login() {
+            const student_number = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ student_number, password })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                currentUser = data.student;
+                document.getElementById('user-display').innerText = currentUser.student_name;
+                document.getElementById('login-section').classList.add('hidden');
+                document.getElementById('main-dashboard').classList.remove('hidden');
+            } else {
+                alert(data.message);
+            }
+        }
+
+        async function fetchData(type) {
+            let url = '';
+            let title = '';
+            
+            if (type === 'schedule') {
+                url = `/api/schedule/${currentUser.student_id}`;
+                title = '📊 個人課表查詢結果 (多表 JOIN)';
+            } else if (type === 'stats') {
+                url = `/api/stats/${currentUser.student_id}`;
+                title = '📈 個人作業完成度統計 (Aggregate 聚合函數)';
+            } else if (type === 'grades') {
+                url = `/api/grades/${currentUser.student_id}`;
+                title = '💯 個人成績與全班平均對比 (巢狀 Subquery 子查詢)';
+            } else if (type === 'slackers') {
+                url = `/api/slackers/${currentUser.class_id}`;
+                title = '⚠️ 班級未繳交作業名單 (進階防混查詢)';
+            }
+
+            const res = await fetch(url);
+            const data = await res.json();
+            
+            document.getElementById('result-title').innerText = title;
+            document.getElementById('result-section').classList.remove('hidden');
+            
+            renderTable(data);
+        }
+
+        function renderTable(data) {
+            const container = document.getElementById('table-container');
+            if (data.length === 0) {
+                container.innerHTML = '<p>查無資料。</p>';
+                return;
+            }
+
+            // 動態產生欄位標題與內容
+            const headers = Object.keys(data[0]);
+            let html = '<table><thead><tr>';
+            headers.forEach(h => html += `<th>${h}</th>`);
+            html += '</tr></thead><tbody>';
+
+            data.forEach(row => {
+                html += '<tr>';
+                headers.forEach(h => html += `<td>${row[h] !== null ? row[h] : '無'}</td>`);
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        function logout() {
+            currentUser = null;
+            document.getElementById('login-section').classList.remove('hidden');
+            document.getElementById('main-dashboard').classList.add('hidden');
+            document.getElementById('result-section').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
